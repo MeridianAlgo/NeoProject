@@ -114,9 +114,10 @@ def add_indicators(df):
     
     return df
 
-def get_processed_data(ticker="BTC-USD", save_path="data/market_data.csv"):
+def get_processed_data(ticker="BTC-USD"):
     """
     Main function to get, store, and process data.
+    Uses SQLite database for persistence.
     """
     database.init_db()
     
@@ -129,15 +130,12 @@ def get_processed_data(ticker="BTC-USD", save_path="data/market_data.csv"):
     df_all = database.load_from_db(ticker)
     
     if df_all.empty:
-        print("No data found in database.")
+        print(f"⚠️ No data found in database for {ticker}")
         return None
         
     df_processed = add_indicators(df_all)
     
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    df_processed.to_csv(save_path)
-    
-    print(f"Database sync complete. Total history: {len(df_processed)} days.")
+    print(f"✅ Sync complete for {ticker}: {len(df_processed)} days.")
     return df_processed
 
 if __name__ == "__main__":

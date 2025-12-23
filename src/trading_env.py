@@ -24,9 +24,14 @@ class TradingEnv(gym.Env):
         # Action space: 0=Neutral, 1=Long, 2=Short
         self.action_space = spaces.Discrete(3)
         
-        # Observation space matches data columns + 5 account states
-        # [Market Features (25), Balance/Init, NetWorth/Init, Pos, Steps, UnrealizedPnL]
-        num_features = len(df.columns) + 5
+        # Calculate volatility for adaptive time horizons
+        self.df['volatility'] = self.df['close'].pct_change().rolling(20).std()
+        self.df['momentum'] = self.df['close'].pct_change(5)  # 5-period momentum
+        self.df.fillna(0, inplace=True)
+        
+        # Observation space: Market Features + 8 account/position states
+        # [Market Features, Balance/Init, NetWorth/Init, Pos, Steps, UnrealizedPnL, Volatility, Momentum, MaxDrawdown]
+        num_features = len(df.columns) + 8
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(num_features,), dtype=np.float32)
         
         self.reset()
@@ -38,6 +43,7 @@ class TradingEnv(gym.Env):
         self.balance = self.initial_balance
         self.net_worth = self.initial_balance
         self.last_net_worth = self.initial_balance
+        self.peak_net_worth = self.initial_balance  # Track for drawdown
         
         # Position tracking
         self.position = 0 # 0: None, 1: Long, -1: Short
@@ -59,16 +65,28 @@ class TradingEnv(gym.Env):
             else: # Short
                 unrealized_pnl_pct = (self.entry_price - current_price) / self.entry_price
 
-        # State: [Market Features, Balance/Initial, NetWorth/Initial, Position, StepsInPos, UnrealizedPnL]
-        # Normalizing scalars helps the LSTM learn faster
+        # Calculate current drawdown from peak
+        drawdown = (self.net_worth - self.peak_net_worth) / self.peak_net_worth if self.peak_net_worth > 0 else 0
+        
+        # Get current volatility and momentum
+        current_volatility = current_data['volatility']
+        current_momentum = current_data['momentum']
+        
+        # Adaptive time horizon based on volatility (higher vol = shorter horizon)
+        adaptive_horizon = self.steps_in_position / (100.0 * (1 + current_volatility * 10))
+
+        # State: [Market Features, Balance/Initial, NetWorth/Initial, Position, AdaptiveHorizon, UnrealizedPnL, Volatility, Momentum, Drawdown]
         obs = np.concatenate((
             current_data.values,
             [
                 self.balance / self.initial_balance,
                 self.net_worth / self.initial_balance,
                 self.position,
-                self.steps_in_position / 100.0, # Scale down for network
-                unrealized_pnl_pct
+                adaptive_horizon,
+                unrealized_pnl_pct,
+                current_volatility * 100,  # Scale up for visibility
+                current_momentum * 100,
+                drawdown
             ]
         ))
         return obs.astype(np.float32)
@@ -100,13 +118,25 @@ class TradingEnv(gym.Env):
         self.current_step += 1
         self._update_net_worth(current_price)
         
-        # Reward: Change in Net Worth
-        reward = self.net_worth - self.last_net_worth
+        # Track peak for drawdown calculation
+        if self.net_worth > self.peak_net_worth:
+            self.peak_net_worth = self.net_worth
         
-        # Time Horizon Incentive: Penalize staying in a flat position too long 
-        # (Encourages efficiency)
-        if self.position != 0 and abs(reward) < 0.01:
-            reward -= 0.001 * self.steps_in_position
+        # Reward: Percentage change in Net Worth (more stable than absolute $)
+        pct_change = (self.net_worth - self.last_net_worth) / self.last_net_worth
+        reward = pct_change * 100  # Scale to percentage points
+        
+        # Adaptive time horizon penalty based on volatility
+        current_volatility = self.df.iloc[self.current_step]['volatility']
+        if self.position != 0 and abs(pct_change) < 0.0001:  # Less than 0.01% change
+            # Higher volatility = more tolerance for holding
+            penalty_factor = max(0.5, 1.0 - current_volatility * 5)
+            reward -= 0.01 * (self.steps_in_position / 10.0) * penalty_factor
+        
+        # Reward for reducing drawdown
+        drawdown = (self.net_worth - self.peak_net_worth) / self.peak_net_worth
+        if drawdown < -0.05:  # More than 5% drawdown
+            reward -= abs(drawdown) * 10  # Penalize drawdowns
             
         self.last_net_worth = self.net_worth
         

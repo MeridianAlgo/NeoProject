@@ -1,9 +1,24 @@
-name: Frequent Model Training
+name: Rotating Ticker Training
 
 on:
   schedule:
-    - cron: '0 */2 * * *'  # Every 2 hours (12 times a day)
-  workflow_dispatch: # Allow manual trigger
+    # Train every 2 hours, rotating through tickers
+    - cron: '0 0,8,16 * * *'   # BTC-USD at 12am, 8am, 4pm UTC
+    - cron: '0 2,10,18 * * *'  # ETH-USD at 2am, 10am, 6pm UTC
+    - cron: '0 4,12,20 * * *'  # SPY at 4am, 12pm, 8pm UTC
+    - cron: '0 6,14,22 * * *'  # QQQ at 6am, 2pm, 10pm UTC
+  workflow_dispatch:
+    inputs:
+      ticker:
+        description: 'Ticker to train on'
+        required: true
+        default: 'BTC-USD'
+        type: choice
+        options:
+          - BTC-USD
+          - ETH-USD
+          - SPY
+          - QQQ
 
 permissions:
   contents: write
@@ -28,21 +43,95 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Sync Database and Train
+      - name: Determine Ticker
+        id: ticker
+        run: |
+          # Determine which ticker to train based on the hour
+          HOUR=$(date -u +%H)
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TICKER="${{ github.event.inputs.ticker }}"
+          else
+            case $HOUR in
+              0|8|16) TICKER="BTC-USD" ;;
+              2|10|18) TICKER="ETH-USD" ;;
+              4|12|20) TICKER="SPY" ;;
+              6|14|22) TICKER="QQQ" ;;
+              *) TICKER="BTC-USD" ;;
+            esac
+          fi
+          echo "ticker=$TICKER" >> $GITHUB_OUTPUT
+          echo "Training on: $TICKER"
+
+      - name: Train Model
         env:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
           ALPACA_BASE_URL: https://paper-api.alpaca.markets
         run: |
-          python neo.py --train --steps 1200000
+          python neo.py --train --steps 50000 --ticker ${{ steps.ticker.outputs.ticker }}
+
+      - name: Get Training Stats
+        id: stats
+        run: |
+          # Count total training runs
+          TRAIN_COUNT=$(git rev-list --count HEAD --grep="Automated training" 2>/dev/null || echo "0")
+          TRAIN_COUNT=$((TRAIN_COUNT + 1))
+          echo "count=$TRAIN_COUNT" >> $GITHUB_OUTPUT
+          
+          # Get model size
+          MODEL_SIZE=$(du -sh models/ | cut -f1)
+          echo "model_size=$MODEL_SIZE" >> $GITHUB_OUTPUT
+          
+          # Get database size
+          DB_SIZE=$(du -sh data/trading_bot.db | cut -f1)
+          echo "db_size=$DB_SIZE" >> $GITHUB_OUTPUT
 
       - name: Commit and Push Updated Model
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add models/
-          git add data/trading_bot.db
-          git commit -m "Automated daily model update [skip ci]" || echo "No changes to commit"
-          git pull --rebase origin main
-          git push
+          git add -A
+          git commit -m "🤖 Automated training #${{ steps.stats.outputs.count }} on ${{ steps.ticker.outputs.ticker }} [skip ci]" || echo "No changes to commit"
+          git push || git push --force
+
+      - name: Create Release Tag
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="train-${{ steps.ticker.outputs.ticker }}-$(date -u +%Y%m%d-%H%M%S)"
+          
+          # Create tag with clean multi-line message
+          git tag -a "$TAG_NAME" -m "🤖 NEO Training Release
+          -------------------------
+          Ticker: ${{ steps.ticker.outputs.ticker }}
+          Training Run: #${{ steps.stats.outputs.count }}
+          Model Size: ${{ steps.stats.outputs.model_size }}
+          Database: ${{ steps.stats.outputs.db_size }}
+          UTC: $(date -u)"
+          
+          git push origin "$TAG_NAME"
+          
+          # Create GitHub Release with premium formatting
+          RELEASE_NOTES=$(cat <<EOF
+          ## 🤖 NEO v4 Automated Training
+          
+          ### 📊 Session Intel
+          - **Ticker Focus**: \`${{ steps.ticker.outputs.ticker }}\`
+          - **Training Iteration**: #${{ steps.stats.outputs.count }}
+          - **Model Size**: \`${{ steps.stats.outputs.model_size }}\`
+          - **Database Scope**: \`${{ steps.stats.outputs.db_size }}\`
+          - **Architecture**: Recurrent PPO (LSTM)
+          
+          ### 🔗 Monitoring
+          Track real-time convergence on your [Weights & Biases Dashboard](https://wandb.ai/home).
+          
+          ---
+          *Generated automatically by Neo Autonomous Training System*
+          EOF
+          )
+          gh release create "$TAG_NAME" \
+            --title "🚀 Training #${{ steps.stats.outputs.count }}: ${{ steps.ticker.outputs.ticker }}" \
+            --notes "$RELEASE_NOTES" \
+            models/neo_recurrent_v4.zip
