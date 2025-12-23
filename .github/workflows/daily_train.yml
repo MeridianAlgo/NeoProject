@@ -1,9 +1,8 @@
-name: Twice-Daily Model Training
+name: Frequent Model Training
 
 on:
   schedule:
-    - cron: '0 5 * * *'  # 5 AM UTC (11 PM CST) - Nightly Training
-    - cron: '0 17 * * *' # 5 PM UTC (11 AM CST) - Mid-day Training
+    - cron: '0 */2 * * *'  # Every 2 hours (12 times a day)
   workflow_dispatch: # Allow manual trigger
 
 permissions:
