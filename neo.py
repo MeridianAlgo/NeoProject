@@ -163,13 +163,26 @@ class NeoBot:
     def run_autonomous(self):
         """The loop that runs the bot independently."""
         print("Starting Neo Autonomous Mode...")
-        model = RecurrentPPO.load("./models/best_neo/best_model")
+        model_path = "./models/best_neo/best_model"
+        if not os.path.exists(model_path + ".zip"):
+            print(f"Model not found at {model_path}. Please train first.")
+            return
+
+        model = RecurrentPPO.load(model_path)
         
         while True:
-            # 1. Sync latest data
+            # 1. Check if User is likely sleeping (e.g., 11 PM to 7 AM)
+            current_hour = time.localtime().tm_hour
+            if 23 <= current_hour or current_hour < 7:
+                print(f"Current hour is {current_hour}:00. Sleeping hours detected (11PM-7AM). Skipping trade execution to stay safe.")
+                print("Waiting 1 hour before next check...")
+                time.sleep(3600)
+                continue
+
+            # 2. Sync latest data
             df = self.sync_data()
             
-            # 2. Get latest observation
+            # 3. Get latest observation
             env = self.get_env(df, training=False)
             obs = env.reset()
             
@@ -179,7 +192,7 @@ class NeoBot:
             
             # Step through to the end of the history to get the latest state
             # This "warms up" the LSTM memory
-            print("Warming up LSTM memory...")
+            print("Warming up LSTM memory with latest data...")
             for i in range(len(df)):
                 action, lstm_states = model.predict(
                     obs, 
@@ -191,17 +204,17 @@ class NeoBot:
                 episode_starts = done
                 if done[0]: break
             
-            # 3. Final Signal
+            # 4. Final Signal
             last_info = info[0]
             action_val = action[0]
             action_str = ["NEUTRAL", "LONG", "SHORT"][action_val]
-            print(f"LATEST SIGNAL: {action_str} | Price: ${last_info['current_price']:.2f}")
+            print(f"LATEST SIGNAL: {action_str} | Price: ${last_info['current_price']:.2f} | Time: {time.strftime('%H:%M:%S')}")
             
-            # 4. Execute via Alpaca
+            # 5. Execute via Alpaca
             self.execute_alpaca(action_val, last_info['current_price'])
             
-            # 5. Wait for next candle (Daily bot -> Wait 1 hour or check again)
-            print("Sleeping for 1 hour...")
+            # 6. Wait for next candle (Daily bot -> Wait 1 hour or check again)
+            print("Trade cycle complete. Sleeping for 1 hour...")
             time.sleep(3600)
 
     def execute_alpaca(self, action, current_price):
