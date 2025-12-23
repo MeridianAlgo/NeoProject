@@ -1,0 +1,4 @@
+Starting Training: 2000 steps...
+Training Neo:   4%|▏   | 84/2000 [00:00<00:02, 835.59steps/s][34m[1mwandb[0m: [33mWARNING[0m Step cannot be set when using tensorboard syncing. Please use `run.define_metric(...)` to define a custom metric to log your step values.
+Training Neo: 2048steps [00:05, 362.40steps/s]               
+Model and Stats saved to models/neo_recurrent_v4

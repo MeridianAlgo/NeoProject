@@ -1,0 +1,64 @@
+_wandb:
+    value:
+        cli_version: 0.23.1
+        code_path: code/neo.py
+        e:
+            ndkg1qr9ugjfqlc70qbpllktlfl0mbmp:
+                args:
+                    - --train
+                    - --steps
+                    - "5000"
+                codePath: neo.py
+                codePathLocal: neo.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                disk:
+                    /:
+                        total: "1022487425024"
+                        used: "588374937600"
+                email: meridianalgo@gmail.com
+                executable: C:\Users\Ishaan\AppData\Local\Programs\Python\Python312\python.exe
+                host: DESKTOP-7UUKFA1
+                memory:
+                    total: "34282184704"
+                os: Windows-11-10.0.26200-SP0
+                program: C:\Users\Ishaan\OneDrive\Desktop\Neo\neo.py
+                python: CPython 3.12.3
+                root: C:\Users\Ishaan\OneDrive\Desktop\Neo
+                startedAt: "2025-12-23T02:07:52.734759Z"
+                writerId: ndkg1qr9ugjfqlc70qbpllktlfl0mbmp
+        m: []
+        python_version: 3.12.3
+        t:
+            "1":
+                - 2
+                - 1
+                - 3
+                - 5
+                - 49
+                - 53
+                - 105
+            "2":
+                - 2
+                - 1
+                - 3
+                - 5
+                - 49
+                - 53
+                - 105
+            "3":
+                - 16
+                - 22
+                - 35
+            "4": 3.12.3
+            "5": 0.23.1
+            "8":
+                - 3
+            "12": 0.23.1
+            "13": windows-amd64
+algorithm:
+    value: RecurrentPPO
+ticker:
+    value: BTC-USD
+total_timesteps:
+    value: 5000

@@ -1,0 +1,8 @@
+gymnasium
+stable-baselines3[extra]
+yfinance
+pandas
+numpy
+ta
+shimmy>=0.2.1
+wandb

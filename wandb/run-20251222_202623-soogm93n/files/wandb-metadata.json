@@ -1,0 +1,29 @@
+{
+  "os":  "Windows-11-10.0.26200-SP0",
+  "python":  "CPython 3.12.3",
+  "startedAt":  "2025-12-23T02:26:23.939379Z",
+  "args":  [
+    "--train",
+    "--steps",
+    "100000"
+  ],
+  "program":  "C:\\Users\\Ishaan\\OneDrive\\Desktop\\Neo\\neo.py",
+  "codePath":  "neo.py",
+  "codePathLocal":  "neo.py",
+  "email":  "meridianalgo@gmail.com",
+  "root":  "C:\\Users\\Ishaan\\OneDrive\\Desktop\\Neo",
+  "host":  "DESKTOP-7UUKFA1",
+  "executable":  "C:\\Users\\Ishaan\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "cpu_count":  8,
+  "cpu_count_logical":  16,
+  "disk":  {
+    "/":  {
+      "total":  "1022487425024",
+      "used":  "588415270912"
+    }
+  },
+  "memory":  {
+    "total":  "34282184704"
+  },
+  "writerId":  "5dhrer46d873czx75yocojj7s1mtiii6"
+}

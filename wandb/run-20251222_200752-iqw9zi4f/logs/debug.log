@@ -1,0 +1,36 @@
+2025-12-22 20:07:52,737 INFO    MainThread:6540 [wandb_setup.py:_flush():80] Current SDK version is 0.23.1
+2025-12-22 20:07:52,737 INFO    MainThread:6540 [wandb_setup.py:_flush():80] Configure stats pid to 6540
+2025-12-22 20:07:52,737 INFO    MainThread:6540 [wandb_setup.py:_flush():80] Loading settings from C:\Users\Ishaan\.config\wandb\settings
+2025-12-22 20:07:52,737 INFO    MainThread:6540 [wandb_setup.py:_flush():80] Loading settings from C:\Users\Ishaan\OneDrive\Desktop\Neo\wandb\settings
+2025-12-22 20:07:52,737 INFO    MainThread:6540 [wandb_setup.py:_flush():80] Loading settings from environment variables
+2025-12-22 20:07:52,737 INFO    MainThread:6540 [wandb_init.py:setup_run_log_directory():714] Logging user logs to C:\Users\Ishaan\OneDrive\Desktop\Neo\wandb\run-20251222_200752-iqw9zi4f\logs\debug.log
+2025-12-22 20:07:52,739 INFO    MainThread:6540 [wandb_init.py:setup_run_log_directory():715] Logging internal logs to C:\Users\Ishaan\OneDrive\Desktop\Neo\wandb\run-20251222_200752-iqw9zi4f\logs\debug-internal.log
+2025-12-22 20:07:52,743 INFO    MainThread:6540 [wandb_init.py:init():841] calling init triggers
+2025-12-22 20:07:52,743 INFO    MainThread:6540 [wandb_init.py:init():846] wandb.init called with sweep_config: {}
+config: {'ticker': 'BTC-USD', 'algorithm': 'RecurrentPPO', 'total_timesteps': 5000, '_wandb': {'code_path': 'code/neo.py'}}
+2025-12-22 20:07:52,743 INFO    MainThread:6540 [wandb_init.py:init():889] starting backend
+2025-12-22 20:07:55,490 INFO    MainThread:6540 [wandb_init.py:init():892] sending inform_init request
+2025-12-22 20:07:55,514 INFO    MainThread:6540 [wandb_init.py:init():900] backend started and connected
+2025-12-22 20:07:55,567 INFO    MainThread:6540 [wandb_init.py:init():970] updated telemetry
+2025-12-22 20:07:55,570 INFO    MainThread:6540 [wandb_init.py:init():994] communicating run to backend with 90.0 second timeout
+2025-12-22 20:07:56,226 INFO    MainThread:6540 [wandb_init.py:init():1041] starting run threads in backend
+2025-12-22 20:07:56,503 INFO    MainThread:6540 [wandb_run.py:_console_start():2521] atexit reg
+2025-12-22 20:07:56,503 INFO    MainThread:6540 [wandb_run.py:_redirect():2369] redirect: wrap_raw
+2025-12-22 20:07:56,503 INFO    MainThread:6540 [wandb_run.py:_redirect():2438] Wrapping output streams.
+2025-12-22 20:07:56,503 INFO    MainThread:6540 [wandb_run.py:_redirect():2461] Redirects installed.
+2025-12-22 20:07:56,507 INFO    MainThread:6540 [wandb_init.py:init():1081] run started, returning control to user process
+2025-12-22 20:07:57,940 INFO    wandb-AsyncioManager-main:6540 [service_client.py:_forward_responses():80] Reached EOF.
+2025-12-22 20:07:57,940 INFO    wandb-AsyncioManager-main:6540 [mailbox.py:close():137] Closing mailbox, abandoning 1 handles.
+2025-12-22 20:07:58,610 ERROR   wandb-AsyncioManager-main:6540 [asyncio_manager.py:fn_wrap_exceptions():183] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "C:\Users\Ishaan\AppData\Local\Programs\Python\Python312\Lib\site-packages\wandb\sdk\lib\asyncio_manager.py", line 181, in fn_wrap_exceptions
+    await fn()
+  File "C:\Users\Ishaan\AppData\Local\Programs\Python\Python312\Lib\site-packages\wandb\sdk\lib\service\service_client.py", line 38, in publish
+    await self._send_server_request(request)
+  File "C:\Users\Ishaan\AppData\Local\Programs\Python\Python312\Lib\site-packages\wandb\sdk\lib\service\service_client.py", line 64, in _send_server_request
+    await self._writer.drain()
+  File "C:\Users\Ishaan\AppData\Local\Programs\Python\Python312\Lib\asyncio\streams.py", line 392, in drain
+    await self._protocol._drain_helper()
+  File "C:\Users\Ishaan\AppData\Local\Programs\Python\Python312\Lib\asyncio\streams.py", line 166, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
