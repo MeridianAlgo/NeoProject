@@ -10,3 +10,4 @@ wandb
 sb3-contrib
 alpaca-trade-api
 tqdm
+python-dotenv
