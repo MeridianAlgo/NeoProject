@@ -165,12 +165,14 @@ class NeoBot:
                     "ticker": self.ticker,
                     "algorithm": "RecurrentPPO",
                     "total_timesteps": total_timesteps,
-                    "n_steps": 512,
-                    "batch_size": 128,
-                    "learning_rate": "3e-4 -> 5e-5",
+                    "n_steps": 2048,
+                    "batch_size": 256,
+                    "learning_rate": "2e-4 -> 1e-6",
                     "lstm_hidden_size": 256,
                     "adaptive_time_horizons": True,
                     "gradient_clipping": 0.5,
+                    "gae_lambda": 0.98,
+                    "vf_coef": 1.0,
                     "data_points": len(df)
                 },
                 sync_tensorboard=True,
@@ -184,16 +186,16 @@ class NeoBot:
             "MlpLstmPolicy", 
             env, 
             verbose=0, # ZERO SPAM
-            learning_rate=linear_schedule(3e-4, min_value=5e-5),  # Learning rate floor
-            n_steps=512,  # Increased for better sample efficiency
-            batch_size=128,  # Larger batches for stability
+            learning_rate=linear_schedule(2e-4, min_value=1e-6),  # More conservative LR
+            n_steps=2048,  # Increased significantly for stable gradients (2048 samples per update)
+            batch_size=256,  # Larger batches for better gradient estimation
             n_epochs=10,  # Standard PPO epochs
-            gamma=0.99,  # Discount factor
-            gae_lambda=0.95,
+            gamma=0.995,  # Slightly higher discount for longer-term planning
+            gae_lambda=0.98,  # Increased for better advantage estimation
             clip_range=0.2,  # PPO clipping
-            clip_range_vf=None,  # No value function clipping initially
-            ent_coef=0.01,  # Entropy for exploration
-            vf_coef=0.5,  # Value function coefficient
+            clip_range_vf=0.2,  # Added value function clipping for stability
+            ent_coef=0.015,  # Slightly more exploration
+            vf_coef=1.0,  # Increased weight on value learning to boost explained_variance
             max_grad_norm=0.5,  # CRITICAL: Gradient clipping to prevent explosion
             policy_kwargs=dict(
                 net_arch=[256, 256],  # Larger network for complex patterns

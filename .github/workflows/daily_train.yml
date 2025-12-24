@@ -69,7 +69,7 @@ jobs:
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
           ALPACA_BASE_URL: https://paper-api.alpaca.markets
         run: |
-          python neo.py --train --steps 50000 --ticker ${{ steps.ticker.outputs.ticker }}
+          python neo.py --train --steps 100000 --ticker ${{ steps.ticker.outputs.ticker }}
 
       - name: Get Training Stats
         id: stats
