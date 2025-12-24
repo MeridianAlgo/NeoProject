@@ -106,8 +106,8 @@ def add_indicators(df):
         df['vol_5'] = df['log_ret'].rolling(window=5).std()
         df['vol_20'] = df['log_ret'].rolling(window=20).std()
 
-        df.fillna(method='bfill', inplace=True)
-        df.fillna(method='ffill', inplace=True)
+        df.bfill(inplace=True)
+        df.ffill(inplace=True)
     except Exception as e:
         print(f"Error adding indicators: {e}")
         return pd.DataFrame()

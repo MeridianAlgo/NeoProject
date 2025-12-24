@@ -74,11 +74,10 @@ class CustomLoggerCallback(BaseCallback):
         # Log to WandB periodically
         if self.n_calls % 100 == 0:
             metrics = {}
-        for key, value in self.model.logger.name_to_value.items():
-            metrics[f"train/{key}"] = value
-        
-        # Add to WandB every 100 steps to avoid overhead
-        if self.n_calls % 100 == 0:
+            for key, value in self.model.logger.name_to_value.items():
+                metrics[f"train/{key}"] = value
+            
+            # Add to WandB every 100 steps to avoid overhead
             wandb.log(metrics, step=self.num_timesteps)
             
         return True
@@ -92,7 +91,14 @@ class NeoBot:
         self.ticker = ticker
         self.model_path = "models/neo_recurrent_v4"
         self.stats_path = "models/neo_stats_v4.pkl"
-        self.alpaca = AlpacaClient()
+        self._alpaca = None
+
+    @property
+    def alpaca(self):
+        """Lazy initialization of AlpacaClient."""
+        if self._alpaca is None:
+            self._alpaca = AlpacaClient()
+        return self._alpaca
 
     def sync_data(self):
         """Pulls from yfinance for the current ticker."""

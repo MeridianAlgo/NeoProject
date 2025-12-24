@@ -18,7 +18,7 @@ class TradingEnv(gym.Env):
     def __init__(self, df, initial_balance=10000):
         super(TradingEnv, self).__init__()
         
-        self.df = df
+        self.df = df.copy()
         self.initial_balance = initial_balance
         
         # Action space: 0=Neutral, 1=Long, 2=Short
@@ -31,7 +31,7 @@ class TradingEnv(gym.Env):
         
         # Observation space: Market Features + 8 account/position states
         # [Market Features, Balance/Init, NetWorth/Init, Pos, Steps, UnrealizedPnL, Volatility, Momentum, MaxDrawdown]
-        num_features = len(df.columns) + 8
+        num_features = len(self.df.columns) + 8
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(num_features,), dtype=np.float32)
         
         self.reset()
