@@ -2,11 +2,8 @@ name: Rotating Ticker Training
 
 on:
   schedule:
-    # Train every 2 hours, rotating through tickers
-    - cron: '0 0,8,16 * * *'   # BTC-USD at 12am, 8am, 4pm UTC
-    - cron: '0 2,10,18 * * *'  # ETH-USD at 2am, 10am, 6pm UTC
-    - cron: '0 4,12,20 * * *'  # SPY at 4am, 12pm, 8pm UTC
-    - cron: '0 6,14,22 * * *'  # QQQ at 6am, 2pm, 10pm UTC
+    # Train every 30 minutes, rotating through tickers
+    - cron: '0,30 * * * *'
   workflow_dispatch:
     inputs:
       ticker:
@@ -46,18 +43,26 @@ jobs:
       - name: Determine Ticker
         id: ticker
         run: |
-          # Determine which ticker to train based on the hour
-          HOUR=$(date -u +%H)
+          # Determine which ticker to train based on the 30-min slot in a 2-hour window
+          # Hour % 2 gives 0 or 1.
+          # Minute is 0 or 30.
+          # Slots (4 total):
+          # 0:00 -> BTC-USD (H%2=0, M=0)
+          # 0:30 -> ETH-USD (H%2=0, M=30)
+          # 1:00 -> SPY     (H%2=1, M=0)
+          # 1:30 -> QQQ     (H%2=1, M=30)
+          
+          HOUR_PARITY=$(($(date -u +%H) % 2))
+          MINUTE=$(date -u +%M)
+          
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             TICKER="${{ github.event.inputs.ticker }}"
           else
-            case $HOUR in
-              0|8|16) TICKER="BTC-USD" ;;
-              2|10|18) TICKER="ETH-USD" ;;
-              4|12|20) TICKER="SPY" ;;
-              6|14|22) TICKER="QQQ" ;;
-              *) TICKER="BTC-USD" ;;
-            esac
+            if [ $HOUR_PARITY -eq 0 ]; then
+                if [ $MINUTE -lt 30 ]; then TICKER="BTC-USD"; else TICKER="ETH-USD"; fi
+            else
+                if [ $MINUTE -lt 30 ]; then TICKER="SPY"; else TICKER="QQQ"; fi
+            fi
           fi
           echo "ticker=$TICKER" >> $GITHUB_OUTPUT
           echo "Training on: $TICKER"

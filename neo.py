@@ -85,6 +85,24 @@ class CustomLoggerCallback(BaseCallback):
     def _on_training_end(self):
         self.pbar.close()
 
+class FinancialMetricsCallback(BaseCallback):
+    """
+    Performs periodic evaluation of financial metrics and logs them to WandB.
+    """
+    def __init__(self, eval_env, ticker, verbose=0):
+        super(FinancialMetricsCallback, self).__init__(verbose)
+        self.eval_env = eval_env
+        self.ticker = ticker
+
+    def _on_step(self):
+        # We perform final evaluation at the end of training for simplicity
+        # but could also do it periodically here.
+        return True
+
+    def _on_training_end(self):
+        # Already handled by the main train function after learn()
+        pass
+
 class NeoBot:
     def __init__(self, ticker="BTC-USD"):
         """Initialize bot with a single ticker for focused training."""
@@ -208,12 +226,134 @@ class NeoBot:
         print(f"Starting Training: {total_timesteps} steps...")
         model.learn(total_timesteps=total_timesteps, callback=callbacks)
         
+        # Performs a final detailed financial evaluation on the test set
+        self.final_evaluation(model, test_df, use_wandb=use_wandb)
+
         # Save
         model.save(self.model_path)
         env.save(self.stats_path)
         print(f"Model and Stats saved to {self.model_path}")
         
         if use_wandb: run.finish()
+
+    def final_evaluation(self, model, test_df, use_wandb=True):
+        """
+        Runs the model once over the entire test set and logs detailed metrics.
+        """
+        print(f"\n📊 Performing final financial evaluation for {self.ticker}...")
+        
+        # Create a fresh evaluation environment (no normalization here for raw metrics)
+        eval_env = TradingEnv(test_df)
+        obs, _ = eval_env.reset()
+        
+        net_worths = []
+        prices = []
+        episode_starts = np.ones((1,), dtype=bool)
+        lstm_states = None
+        
+        done = False
+        while not done:
+            action, lstm_states = model.predict(
+                obs, 
+                state=lstm_states, 
+                episode_start=episode_starts, 
+                deterministic=True
+            )
+            obs, reward, terminated, truncated, info = eval_env.step(action[0])
+            done = terminated or truncated
+            episode_starts = [done]
+            
+            net_worths.append(info['net_worth'])
+            prices.append(info['current_price'])
+        
+        # Calculate Metrics
+        returns = np.diff(net_worths) / net_worths[:-1]
+        is_crypto = "BTC" in self.ticker or "ETH" in self.ticker
+        trading_days = 365 if is_crypto else 252
+        
+        avg_ret = np.mean(returns)
+        std_ret = np.std(returns)
+        sharpe = (avg_ret / std_ret) * np.sqrt(trading_days) if std_ret > 0 else 0
+        
+        total_return = (net_worths[-1] - net_worths[0]) / net_worths[0]
+        bh_return = (prices[-1] - prices[0]) / prices[0]
+        
+        # SMA Crossover Baseline (SMA 20 vs 50)
+        # We simulate this on the test_df
+        sma_net_worth = [1.0]
+        sma_pos = 0 # 0: flat, 1: long
+        for i in range(1, len(test_df)):
+            row = test_df.iloc[i]
+            prev_row = test_df.iloc[i-1]
+            
+            # Crossover logic
+            if prev_row['sma_20'] <= prev_row['sma_50'] and row['sma_20'] > row['sma_50']:
+                sma_pos = 1
+            elif prev_row['sma_20'] >= prev_row['sma_50'] and row['sma_20'] < row['sma_50']:
+                sma_pos = 0
+            
+            # Update net worth
+            price_change = (row['close'] - prev_row['close']) / prev_row['close']
+            current_worth = sma_net_worth[-1] * (1 + (price_change if sma_pos == 1 else 0))
+            sma_net_worth.append(current_worth)
+        
+        sma_return = sma_net_worth[-1] - 1.0
+
+        # Drawdown
+        peak = net_worths[0]
+        max_drawdown = 0
+        for nw in net_worths:
+            if nw > peak: peak = nw
+            dd = (nw - peak) / peak
+            if dd < max_drawdown: max_drawdown = dd
+            
+        win_rate = info.get('win_rate', 0)
+        trades = info.get('total_trades', 0)
+
+        print(f"🏁 Eval Results ({self.ticker}):")
+        print(f"   Total Return:  {total_return*100:.2f}%")
+        print(f"   B&H Return:    {bh_return*100:.2f}%")
+        print(f"   SMA Return:    {sma_return*100:.2f}%")
+        print(f"   Sharpe Ratio:  {sharpe:.2f}")
+        print(f"   Max Drawdown:  {max_drawdown*100:.2f}%")
+        print(f"   Win Rate:      {win_rate*100:.2f}% ({trades} trades)")
+        
+        if use_wandb:
+            # 1. Log summary metrics
+            wandb.run.summary["eval/total_return"] = total_return
+            wandb.run.summary["eval/buy_and_hold_return"] = bh_return
+            wandb.run.summary["eval/sma_crossover_return"] = sma_return
+            wandb.run.summary["eval/sharpe_ratio"] = sharpe
+            wandb.run.summary["eval/max_drawdown"] = max_drawdown
+            wandb.run.summary["eval/win_rate"] = win_rate
+            wandb.run.summary["eval/total_trades"] = trades
+            
+            # 2. Log custom curves
+            # Normalize for comparison plot
+            neo_curve = [nw / net_worths[0] for nw in net_worths]
+            bh_curve = [p / prices[0] for p in prices]
+            sma_curve = sma_net_worth
+            
+            wandb.log({
+                "eval/portfolio_comparison": wandb.plot.line_series(
+                    xs=[i for i in range(len(neo_curve))],
+                    ys=[neo_curve, bh_curve, sma_curve],
+                    keys=["Neo Portfolio", f"Buy & Hold {self.ticker}", "SMA Crossover (20/50)"],
+                    title=f"Neo vs Baselines ({self.ticker})",
+                    xname="Day"
+                )
+            })
+            
+            # Log separate curves for clarity in WandB dashboard
+            for i in range(len(neo_curve)):
+                wandb.log({
+                    "eval/neo_value": neo_curve[i],
+                    "eval/bh_value": bh_curve[i],
+                    "eval/sma_value": sma_curve[min(i, len(sma_curve)-1)],
+                    "eval/step": i
+                }, commit=False)
+            
+            wandb.log({"eval/completed": 1})
 
     def run_autonomous(self):
         """The loop that runs the bot independently with live Alpaca data."""

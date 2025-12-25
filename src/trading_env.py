@@ -51,6 +51,11 @@ class TradingEnv(gym.Env):
         self.shares_held = 0 
         self.steps_in_position = 0 # Time Horizon awareness
         
+        # Metrics tracking
+        self.total_trades = 0
+        self.profitable_trades = 0
+        self.net_worth_history = [self.initial_balance]
+        
         return self._get_observation(), {}
 
     def _get_observation(self):
@@ -103,7 +108,10 @@ class TradingEnv(gym.Env):
         if self.position != action:
             # 1. Close existing
             if self.position != 0:
-                self._close_position(current_price)
+                pnl = self._close_position(current_price)
+                self.total_trades += 1
+                if pnl > 0:
+                    self.profitable_trades += 1
                 self.steps_in_position = 0
             
             # 2. Open new
@@ -117,6 +125,7 @@ class TradingEnv(gym.Env):
         # Update Step
         self.current_step += 1
         self._update_net_worth(current_price)
+        self.net_worth_history.append(self.net_worth)
         
         # Track peak for drawdown calculation
         if self.net_worth > self.peak_net_worth:
@@ -143,11 +152,21 @@ class TradingEnv(gym.Env):
         terminated = self.current_step >= len(self.df) - 1
         truncated = False
         
+        # Close position at the end of the episode for metrics
+        if terminated and self.position != 0:
+             pnl = self._close_position(current_price)
+             self.total_trades += 1
+             if pnl > 0:
+                self.profitable_trades += 1
+        
         info = {
             'net_worth': self.net_worth,
             'current_price': current_price,
             'position': self.position,
-            'steps_in_pos': self.steps_in_position
+            'steps_in_pos': self.steps_in_position,
+            'total_trades': self.total_trades,
+            'profitable_trades': self.profitable_trades,
+            'win_rate': (self.profitable_trades / self.total_trades) if self.total_trades > 0 else 0
         }
         
         return self._get_observation(), reward, terminated, truncated, info
@@ -165,8 +184,10 @@ class TradingEnv(gym.Env):
              self.position = -1
              
     def _close_position(self, current_price):
+        pnl = 0
         if self.position == 1: # Closing Long
             self.balance = self.shares_held * current_price
+            pnl = self.balance - (self.shares_held * self.entry_price)
         elif self.position == -1: # Closing Short
             pnl = (self.entry_price - current_price) * self.shares_held
             initial_value = self.shares_held * self.entry_price
@@ -175,6 +196,7 @@ class TradingEnv(gym.Env):
         self.position = 0
         self.shares_held = 0
         self.entry_price = 0
+        return pnl
         
     def _update_net_worth(self, current_price):
         if self.position == 0:
