@@ -227,7 +227,7 @@ class NeoBot:
         model.learn(total_timesteps=total_timesteps, callback=callbacks)
         
         # Performs a final detailed financial evaluation on the test set
-        self.final_evaluation(model, test_df, use_wandb=use_wandb)
+        self.final_evaluation(model, test_df, use_wandb=use_wandb, train_env=env)
 
         # Save
         model.save(self.model_path)
@@ -236,7 +236,7 @@ class NeoBot:
         
         if use_wandb: run.finish()
 
-    def final_evaluation(self, model, test_df, use_wandb=True):
+    def final_evaluation(self, model, test_df, use_wandb=True, train_env=None):
         """
         Runs the model once over the entire test set and logs detailed metrics.
         """
@@ -253,13 +253,22 @@ class NeoBot:
         
         done = False
         while not done:
+            # Important: Normalize the observation using the same stats as training
+            if train_env is not None:
+                norm_obs = train_env.normalize_obs(np.array([obs]))
+            else:
+                norm_obs = obs
+
             action, lstm_states = model.predict(
-                obs, 
+                norm_obs, 
                 state=lstm_states, 
                 episode_start=episode_starts, 
                 deterministic=True
             )
-            obs, reward, terminated, truncated, info = eval_env.step(action[0])
+            
+            # Use item() to safely extract the scalar action, whether it's 0-dim or 1-dim
+            action_val = action.item() if isinstance(action, np.ndarray) else action
+            obs, reward, terminated, truncated, info = eval_env.step(action_val)
             done = terminated or truncated
             episode_starts = [done]
             
