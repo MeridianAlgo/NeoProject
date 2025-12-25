@@ -1,6 +1,6 @@
 # 🤖 Neo v4: Advanced Autonomous Trading AI
 
-[![Training Status](https://img.shields.io/badge/Training-Every%202%20Hours-brightgreen)](https://github.com/MeridianAlgo/NeoProject/actions)
+[![Training Status](https://img.shields.io/badge/Training-Every%2030%20Minutes-brightgreen)](https://github.com/MeridianAlgo/NeoProject/actions)
 [![Model](https://img.shields.io/badge/Model-RecurrentPPO%20LSTM-blue)](https://wandb.ai/your-username/neo-v4)
 [![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
 
