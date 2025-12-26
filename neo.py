@@ -374,9 +374,7 @@ class NeoBot:
                     xs=[i for i in range(len(neo_curve))],
                     ys=[neo_curve, bh_curve, sma_curve],
                     keys=["Neo Portfolio", f"Buy & Hold {self.ticker}", "SMA Crossover (20/50)"],
-                    title=f"Neo vs Baselines ({self.ticker})",
-                    xname="Day",
-                    yname="Relative Performance"
+                    title=f"Neo vs Baselines ({self.ticker})"
                 )
             })
 
@@ -386,9 +384,7 @@ class NeoBot:
                     xs=[i for i in range(len(cumulative_rewards))],
                     ys=[cumulative_rewards],
                     keys=["Cumulative Reward"],
-                    title=f"Learning Signal Stability ({self.ticker})",
-                    xname="Day",
-                    yname="Sum of Rewards"
+                    title=f"Learning Signal Stability ({self.ticker})"
                 )
             })
             
@@ -398,9 +394,7 @@ class NeoBot:
                     xs=[i for i in range(len(net_worths))],
                     ys=[net_worths],
                     keys=["Net Worth ($)"],
-                    title=f"Neo Absolute Net Worth ({self.ticker})",
-                    xname="Day",
-                    yname="Portfolio Value ($)"
+                    title=f"Neo Absolute Net Worth ({self.ticker})"
                 )
             })
 
@@ -410,9 +404,7 @@ class NeoBot:
                     xs=[i for i in range(len(positions))],
                     ys=[positions],
                     keys=["Position (0=Flat, 1=Long, -1=Short)"],
-                    title=f"Neo Trading Activity ({self.ticker})",
-                    xname="Day",
-                    yname="Position State"
+                    title=f"Neo Trading Activity ({self.ticker})"
                 )
             })
 
@@ -428,9 +420,7 @@ class NeoBot:
                     xs=[i for i in range(len(dd_curve))],
                     ys=[dd_curve],
                     keys=["Drawdown (%)"],
-                    title=f"Neo Drawdown ({self.ticker})",
-                    xname="Day",
-                    yname="Drawdown (%)"
+                    title=f"Neo Drawdown ({self.ticker})"
                 )
             })
             
