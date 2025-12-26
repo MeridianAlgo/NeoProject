@@ -363,7 +363,11 @@ class NeoBot:
             wandb.run.summary["eval/final_net_worth"] = net_worths[-1]
             
             # 2. Log custom curves via Tables for persistent Y-Axis labeling
-            
+            # Normalize for comparison plot
+            neo_curve = [nw / net_worths[0] for nw in net_worths]
+            bh_curve = [p / prices[0] for p in prices]
+            sma_curve = sma_net_worth
+
             # 2a. Performance Comparison Table
             comp_data = []
             for i in range(len(neo_curve)):
