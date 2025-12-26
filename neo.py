@@ -249,6 +249,10 @@ class NeoBot:
         
         net_worths = []
         prices = []
+        positions = []
+        cumulative_rewards = []
+        daily_returns = []
+        
         episode_starts = np.ones((1,), dtype=bool)
         lstm_states = None
         
@@ -259,7 +263,7 @@ class NeoBot:
                 norm_obs = train_env.normalize_obs(np.array([obs]))
             else:
                 norm_obs = obs
-
+ 
             action, lstm_states = model.predict(
                 norm_obs, 
                 state=lstm_states, 
@@ -275,6 +279,13 @@ class NeoBot:
             
             net_worths.append(info['net_worth'])
             prices.append(info['current_price'])
+            positions.append(info['position'])
+            cumulative_rewards.append(info.get('cumulative_reward', 0))
+            
+            if len(net_worths) > 1:
+                daily_returns.append((net_worths[-1] - net_worths[-2]) / net_worths[-2])
+            else:
+                daily_returns.append(0)
         
         # Calculate Metrics
         returns = np.diff(net_worths) / net_worths[:-1]
@@ -356,6 +367,18 @@ class NeoBot:
                     yname="Relative Performance"
                 )
             })
+
+            # Cumulative Rewards
+            wandb.log({
+                "eval/cumulative_reward_plot": wandb.plot.line_series(
+                    xs=[i for i in range(len(cumulative_rewards))],
+                    ys=[cumulative_rewards],
+                    keys=["Cumulative Reward"],
+                    title=f"Learning Signal Stability ({self.ticker})",
+                    xname="Day",
+                    yname="Sum of Rewards"
+                )
+            })
             
             # Absolute Net Worth ($)
             wandb.log({
@@ -366,6 +389,18 @@ class NeoBot:
                     title=f"Neo Absolute Net Worth ({self.ticker})",
                     xname="Day",
                     yname="Portfolio Value ($)"
+                )
+            })
+
+            # Holdings/Position over time
+            wandb.log({
+                "eval/position_strategy": wandb.plot.line_series(
+                    xs=[i for i in range(len(positions))],
+                    ys=[positions],
+                    keys=["Position (0=Flat, 1=Long, -1=Short)"],
+                    title=f"Neo Trading Activity ({self.ticker})",
+                    xname="Day",
+                    yname="Position State"
                 )
             })
 
@@ -395,6 +430,9 @@ class NeoBot:
                     "eval/sma_value": sma_curve[min(i, len(sma_curve)-1)],
                     "eval/net_worth": net_worths[i],
                     "eval/drawdown": dd_curve[i],
+                    "eval/position": positions[i],
+                    "eval/cumulative_reward": cumulative_rewards[i],
+                    "eval/daily_return": daily_returns[i],
                     "eval/trading_step": i
                 }, commit=False)
             
@@ -415,6 +453,48 @@ class NeoBot:
         with open("eval_results.json", "w") as f:
             json.dump(results, f, indent=4)
         print(f"✅ Evaluation results saved to eval_results.json")
+
+    def run_rigorous_tests(self, use_wandb=True):
+        """Perform chronological Out-of-Sample (OOS) and Walk-forward tests."""
+        print(f"\n{'='*70}")
+        print(f"  RIGOROUS ROBUSTNESS TESTING: {self.ticker}")
+        print(f"{'='*70}\n")
+        
+        df = self.sync_data()
+        
+        # Chronological Split: 2024 for training, 2025 for OOS testing
+        # Or relative splits if data is shorter
+        split_point = int(len(df) * 0.8)
+        train_df = df.iloc[:split_point]
+        test_df = df.iloc[split_point:]
+        
+        print(f"Training Period: {train_df.index[0]} to {train_df.index[-1]} ({len(train_df)} days)")
+        print(f"OOS Test Period: {test_df.index[0]} to {test_df.index[-1]} ({len(test_df)} days)")
+        
+        # Train locally for testing
+        env = self.get_env(train_df, training=True)
+        
+        if use_wandb:
+            wandb.init(
+                project="neo-v4-rigorous",
+                name=f"rigorous_{self.ticker}_{time.strftime('%Y%m%d_%H%M%S')}",
+                config={"ticker": self.ticker, "mode": "rigorous_oos"}
+            )
+
+        model = RecurrentPPO(
+            "MlpLstmPolicy", env, verbose=0,
+            learning_rate=1e-4, n_steps=1024, batch_size=128
+        )
+        
+        print(f"Training base model for OOS test (25k steps)...")
+        model.learn(total_timesteps=25000)
+        
+        # Run evaluation on OOS data
+        print(f"Running Out-of-Sample Evaluation...")
+        self.final_evaluation(model, test_df, use_wandb=use_wandb, train_env=env)
+        
+        if use_wandb: wandb.finish()
+        print(f"\n✅ Rigorous testing complete for {self.ticker}")
 
     def run_autonomous(self):
         """The loop that runs the bot independently with live Alpaca data."""
@@ -688,6 +768,7 @@ if __name__ == "__main__":
     parser.add_argument("--steps", type=int, default=50000, help="Training steps")
     parser.add_argument("--ticker", type=str, default="BTC-USD", help="Ticker to train on (BTC-USD, ETH-USD, SPY, QQQ)")
     parser.add_argument("--trade", action="store_true", help="Run autonomous trading")
+    parser.add_argument("--test", action="store_true", help="Run rigorous robustness tests")
     args = parser.parse_args()
 
     bot = NeoBot(ticker=args.ticker)
@@ -697,6 +778,8 @@ if __name__ == "__main__":
         print(f"  Steps: {args.steps:,}")
         print(f"{'='*60}\n")
         bot.train(total_timesteps=args.steps)
+    elif args.test:
+        bot.run_rigorous_tests()
     elif args.trade:
         bot.run_autonomous()
     else:

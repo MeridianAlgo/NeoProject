@@ -15,11 +15,13 @@ class TradingEnv(gym.Env):
     """
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df, initial_balance=10000):
+    def __init__(self, df, initial_balance=10000, commission=0.001, slippage=0.0005):
         super(TradingEnv, self).__init__()
         
         self.df = df.copy()
         self.initial_balance = initial_balance
+        self.commission = commission  # Default 0.1%
+        self.slippage = slippage      # Default 0.05%
         
         # Action space: 0=Neutral, 1=Long, 2=Short
         self.action_space = spaces.Discrete(3)
@@ -54,6 +56,7 @@ class TradingEnv(gym.Env):
         # Metrics tracking
         self.total_trades = 0
         self.profitable_trades = 0
+        self.cumulative_reward = 0
         self.net_worth_history = [self.initial_balance]
         
         return self._get_observation(), {}
@@ -147,6 +150,7 @@ class TradingEnv(gym.Env):
         if drawdown < -0.05:  # More than 5% drawdown
             reward -= abs(drawdown) * 10  # Penalize drawdowns
             
+        self.cumulative_reward += reward
         self.last_net_worth = self.net_worth
         
         terminated = self.current_step >= len(self.df) - 1
@@ -166,32 +170,45 @@ class TradingEnv(gym.Env):
             'steps_in_pos': self.steps_in_position,
             'total_trades': self.total_trades,
             'profitable_trades': self.profitable_trades,
-            'win_rate': (self.profitable_trades / self.total_trades) if self.total_trades > 0 else 0
+            'win_rate': (self.profitable_trades / self.total_trades) if self.total_trades > 0 else 0,
+            'cumulative_reward': self.cumulative_reward
         }
         
         return self._get_observation(), reward, terminated, truncated, info
         
     def _open_position(self, action, price):
-        # Commit full Net Worth (All-in strategy)
+        # Apply slippage (buy higher, sell lower)
+        effective_price = price * (1 + self.slippage) if action == 1 else price * (1 - self.slippage)
+        
+        # Apply commission
+        self.net_worth -= self.net_worth * self.commission
+        
         if action == 1: # LONG
-             self.shares_held = self.net_worth / price
+             self.shares_held = self.net_worth / effective_price
              self.balance = 0 
-             self.entry_price = price
+             self.entry_price = effective_price
              self.position = 1
         elif action == 2: # SHORT
-             self.shares_held = self.net_worth / price
-             self.entry_price = price
+             self.shares_held = self.net_worth / effective_price
+             self.entry_price = effective_price
              self.position = -1
              
     def _close_position(self, current_price):
+        # Apply slippage
+        effective_price = current_price * (1 - self.slippage) if self.position == 1 else current_price * (1 + self.slippage)
+        
         pnl = 0
         if self.position == 1: # Closing Long
-            self.balance = self.shares_held * current_price
+            self.balance = self.shares_held * effective_price
             pnl = self.balance - (self.shares_held * self.entry_price)
         elif self.position == -1: # Closing Short
-            pnl = (self.entry_price - current_price) * self.shares_held
+            pnl = (self.entry_price - effective_price) * self.shares_held
             initial_value = self.shares_held * self.entry_price
             self.balance = initial_value + pnl
+            
+        # Apply commission on closing too
+        self.balance -= self.balance * self.commission
+        self.net_worth = self.balance
             
         self.position = 0
         self.shares_held = 0

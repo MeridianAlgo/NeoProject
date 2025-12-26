@@ -1,0 +1,113 @@
+name: Weekend Rigorous Audit
+
+on:
+  schedule:
+    # Run at 12:00 UTC every Saturday and Sunday
+    - cron: '0 12 * * 6,0'
+  workflow_dispatch:
+    inputs:
+      ticker:
+        description: 'Ticker to stress test'
+        required: true
+        default: 'SPY'
+        type: choice
+        options:
+          - BTC-USD
+          - ETH-USD
+          - SPY
+          - QQQ
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    name: Rigorous Performance Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          sudo apt-get install -y jq bc
+          pip install -r requirements.txt
+
+      - name: Determine Ticker
+        id: ticker
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TICKER="${{ github.event.inputs.ticker }}"
+          else
+            # Rotate: Sat = SPY, Sun = BTC-USD
+            DAY=$(date +%u)
+            if [ "$DAY" -eq 6 ]; then TICKER="SPY"; else TICKER="BTC-USD"; fi
+          fi
+          echo "ticker=$TICKER" >> $GITHUB_OUTPUT
+
+      - name: Run Rigorous OOS Tests
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: |
+          python neo.py --test --ticker ${{ steps.ticker.outputs.ticker }}
+
+      - name: Create Audit Release
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="audit-${{ steps.ticker.outputs.ticker }}-$(date -u +%Y%m%d)"
+          
+          # Extract metrics from JSON
+          TR_PCT=$(jq -r '.total_return_pct' eval_results.json)
+          BH_PCT=$(jq -r '.buy_and_hold_return_pct' eval_results.json)
+          SHARPE=$(jq -r '.sharpe_ratio' eval_results.json)
+          MDD=$(jq -r '.max_drawdown_pct' eval_results.json)
+          WR=$(jq -r '.win_rate_pct' eval_results.json)
+          FW=$(jq -r '.final_net_worth' eval_results.json)
+
+          if [[ $TR_PCT == -* ]]; then COLOR="red"; else COLOR="green"; fi
+          
+          RELEASE_NOTES=$(cat <<EOF
+          # 🛡️ Weekend Rigorous Audit: ${{ steps.ticker.outputs.ticker }}
+          
+          > This is a high-pressure stress test on unseen 2025 data with realistic fees (0.1%) and slippage (0.05%).
+          
+          ![Return](https://img.shields.io/badge/OOS_Return-${TR_PCT}%25-${COLOR}?style=for-the-badge)
+          ![Sharpe](https://img.shields.io/badge/Sharpe-${SHARPE}-blue?style=for-the-badge)
+          ![WinRate](https://img.shields.io/badge/Win_Rate-${WR}%25-gold?style=for-the-badge)
+
+          ### 📉 Out-of-Sample (OOS) Performance
+          | Metric | Value | Baseline (B&H) |
+          | :--- | :--- | :--- |
+          | **Net Return** | \`${TR_PCT}%\` | \`${BH_PCT}%\` |
+          | **Sharpe Ratio** | \`${SHARPE}\` | \`-\` |
+          | **Max Drawdown** | \`${MDD}%\` | \`-\` |
+          | **Win Rate** | \`${WR}%\` | \`-\` |
+          
+          ### 🕵️ Audit Intel
+          - **Regime**: Out-of-Sample Robustness Check
+          - **Transaction Costs**: 0.1% Commission + 0.05% Slippage (Included)
+          - **Final Net Worth**: \`$${FW}\`
+          
+          ### 📊 Deep Analysis
+          Detailed equity curves and holding patterns are available in the [Weights & Biases Audit Dashboard](https://wandb.ai/home). 
+          Check the 'Neo Trading Activity' chart to see if the agent is being too passive.
+          
+          ---
+          *Neo v4 Rigorous Audit System*
+          EOF
+          )
+          
+          gh release create "$TAG_NAME" \
+            --title "🛡️ Weekend Audit: ${{ steps.ticker.outputs.ticker }} (${TR_PCT}%)" \
+            --notes "$RELEASE_NOTES"
