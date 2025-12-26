@@ -4,6 +4,7 @@ import time
 import pandas as pd
 import numpy as np
 import wandb
+import json
 from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
@@ -329,13 +330,14 @@ class NeoBot:
         
         if use_wandb:
             # 1. Log summary metrics
-            wandb.run.summary["eval/total_return"] = total_return
-            wandb.run.summary["eval/buy_and_hold_return"] = bh_return
-            wandb.run.summary["eval/sma_crossover_return"] = sma_return
+            wandb.run.summary["eval/total_return_pct"] = total_return * 100
+            wandb.run.summary["eval/buy_and_hold_return_pct"] = bh_return * 100
+            wandb.run.summary["eval/sma_crossover_return_pct"] = sma_return * 100
             wandb.run.summary["eval/sharpe_ratio"] = sharpe
-            wandb.run.summary["eval/max_drawdown"] = max_drawdown
-            wandb.run.summary["eval/win_rate"] = win_rate
+            wandb.run.summary["eval/max_drawdown_pct"] = max_drawdown * 100
+            wandb.run.summary["eval/win_rate_pct"] = win_rate * 100
             wandb.run.summary["eval/total_trades"] = trades
+            wandb.run.summary["eval/final_net_worth"] = net_worths[-1]
             
             # 2. Log custom curves
             # Normalize for comparison plot
@@ -343,26 +345,76 @@ class NeoBot:
             bh_curve = [p / prices[0] for p in prices]
             sma_curve = sma_net_worth
             
+            # Performance Comparison (Normalized)
             wandb.log({
                 "eval/portfolio_comparison": wandb.plot.line_series(
                     xs=[i for i in range(len(neo_curve))],
                     ys=[neo_curve, bh_curve, sma_curve],
                     keys=["Neo Portfolio", f"Buy & Hold {self.ticker}", "SMA Crossover (20/50)"],
                     title=f"Neo vs Baselines ({self.ticker})",
-                    xname="Day"
+                    xname="Day",
+                    yname="Relative Performance"
                 )
             })
             
-            # Log separate curves for clarity in WandB dashboard
+            # Absolute Net Worth ($)
+            wandb.log({
+                "eval/absolute_profit": wandb.plot.line_series(
+                    xs=[i for i in range(len(net_worths))],
+                    ys=[net_worths],
+                    keys=["Net Worth ($)"],
+                    title=f"Neo Absolute Net Worth ({self.ticker})",
+                    xname="Day",
+                    yname="Portfolio Value ($)"
+                )
+            })
+
+            # Drawdown Curve
+            dd_curve = []
+            current_peak = net_worths[0]
+            for nw in net_worths:
+                if nw > current_peak: current_peak = nw
+                dd_curve.append((nw - current_peak) / current_peak * 100)
+            
+            wandb.log({
+                "eval/drawdown_plot": wandb.plot.line_series(
+                    xs=[i for i in range(len(dd_curve))],
+                    ys=[dd_curve],
+                    keys=["Drawdown (%)"],
+                    title=f"Neo Drawdown ({self.ticker})",
+                    xname="Day",
+                    yname="Drawdown (%)"
+                )
+            })
+            
+            # Log separate curves for clarity in WandB dashboard (Step-wise logging)
             for i in range(len(neo_curve)):
                 wandb.log({
                     "eval/neo_value": neo_curve[i],
                     "eval/bh_value": bh_curve[i],
                     "eval/sma_value": sma_curve[min(i, len(sma_curve)-1)],
-                    "eval/step": i
+                    "eval/net_worth": net_worths[i],
+                    "eval/drawdown": dd_curve[i],
+                    "eval/trading_step": i
                 }, commit=False)
             
             wandb.log({"eval/completed": 1})
+
+        # Save results to local JSON for GitHub Actions/CI consumption
+        results = {
+            "ticker": self.ticker,
+            "total_return_pct": float(total_return * 100),
+            "buy_and_hold_return_pct": float(bh_return * 100),
+            "sma_return_pct": float(sma_return * 100),
+            "sharpe_ratio": float(sharpe),
+            "max_drawdown_pct": float(max_drawdown * 100),
+            "win_rate_pct": float(win_rate * 100),
+            "total_trades": int(trades),
+            "final_net_worth": float(net_worths[-1])
+        }
+        with open("eval_results.json", "w") as f:
+            json.dump(results, f, indent=4)
+        print(f"✅ Evaluation results saved to eval_results.json")
 
     def run_autonomous(self):
         """The loop that runs the bot independently with live Alpaca data."""
