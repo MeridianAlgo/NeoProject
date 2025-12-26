@@ -362,83 +362,62 @@ class NeoBot:
             wandb.run.summary["eval/total_trades"] = trades
             wandb.run.summary["eval/final_net_worth"] = net_worths[-1]
             
-            # 2. Log custom curves
-            # Normalize for comparison plot
-            neo_curve = [nw / net_worths[0] for nw in net_worths]
-            bh_curve = [p / prices[0] for p in prices]
-            sma_curve = sma_net_worth
+            # 2. Log custom curves via Tables for persistent Y-Axis labeling
             
-            # Performance Comparison (Normalized)
-            wandb.log({
-                "eval/portfolio_comparison": wandb.plot.line_series(
-                    xs=[i for i in range(len(neo_curve))],
-                    ys=[neo_curve, bh_curve, sma_curve],
-                    keys=["Neo Portfolio", f"Buy & Hold {self.ticker}", "SMA Crossover (20/50)"],
-                    title=f"Neo vs Baselines ({self.ticker})"
-                )
-            })
-
-            # Cumulative Rewards
-            wandb.log({
-                "eval/cumulative_reward_plot": wandb.plot.line_series(
-                    xs=[i for i in range(len(cumulative_rewards))],
-                    ys=[cumulative_rewards],
-                    keys=["Cumulative Reward"],
-                    title=f"Learning Signal Stability ({self.ticker})"
-                )
-            })
+            # 2a. Performance Comparison Table
+            comp_data = []
+            for i in range(len(neo_curve)):
+                comp_data.append([i, "Neo Portfolio", neo_curve[i]])
+                comp_data.append([i, f"Buy & Hold {self.ticker}", bh_curve[i]])
+                comp_data.append([i, "SMA Crossover (20/50)", sma_curve[min(i, len(sma_curve)-1)]])
             
-            # Absolute Net Worth ($)
-            wandb.log({
-                "eval/absolute_profit": wandb.plot.line_series(
-                    xs=[i for i in range(len(net_worths))],
-                    ys=[net_worths],
-                    keys=["Net Worth ($)"],
-                    title=f"Neo Absolute Net Worth ({self.ticker})"
-                )
-            })
+            comp_table = wandb.Table(data=comp_data, columns=["Evaluation Day", "Strategy", "Relative Performance"])
+            wandb.log({"eval/portfolio_comparison": wandb.plot.line(
+                comp_table, "Evaluation Day", "Relative Performance", 
+                title=f"Neo vs Baselines ({self.ticker})"
+            )})
 
-            # Holdings/Position over time
-            wandb.log({
-                "eval/position_strategy": wandb.plot.line_series(
-                    xs=[i for i in range(len(positions))],
-                    ys=[positions],
-                    keys=["Position (0=Flat, 1=Long, -1=Short)"],
-                    title=f"Neo Trading Activity ({self.ticker})"
-                )
-            })
+            # 2b. Absolute Net Worth Table
+            nw_data = [[i, float(nw)] for i, nw in enumerate(net_worths)]
+            nw_table = wandb.Table(data=nw_data, columns=["Evaluation Day", "Portfolio Value ($)"])
+            wandb.log({"eval/absolute_profit": wandb.plot.line(
+                nw_table, "Evaluation Day", "Portfolio Value ($)", 
+                title=f"Neo Absolute Net Worth ({self.ticker})"
+            )})
 
-            # Drawdown Curve
-            dd_curve = []
+            # 2c. Position Strategy Table
+            pos_data = [[i, int(p)] for i, p in enumerate(positions)]
+            pos_table = wandb.Table(data=pos_data, columns=["Evaluation Day", "Position State (0=Flat, 1=L, -1=S)"])
+            wandb.log({"eval/position_strategy": wandb.plot.line(
+                pos_table, "Evaluation Day", "Position State (0=Flat, 1=L, -1=S)", 
+                title=f"Neo Trading Activity ({self.ticker})"
+            )})
+
+            # 2d. Drawdown Table
+            dd_vals = []
             current_peak = net_worths[0]
             for nw in net_worths:
                 if nw > current_peak: current_peak = nw
-                dd_curve.append((nw - current_peak) / current_peak * 100)
+                dd_vals.append((nw - current_peak) / current_peak * 100)
             
-            wandb.log({
-                "eval/drawdown_plot": wandb.plot.line_series(
-                    xs=[i for i in range(len(dd_curve))],
-                    ys=[dd_curve],
-                    keys=["Drawdown (%)"],
-                    title=f"Neo Drawdown ({self.ticker})"
-                )
-            })
-            
-            # Log separate curves for clarity in WandB dashboard (Step-wise logging)
-            for i in range(len(neo_curve)):
-                wandb.log({
-                    "eval/neo_value": neo_curve[i],
-                    "eval/bh_value": bh_curve[i],
-                    "eval/sma_value": sma_curve[min(i, len(sma_curve)-1)],
-                    "eval/net_worth": net_worths[i],
-                    "eval/drawdown": dd_curve[i],
-                    "eval/position": positions[i],
-                    "eval/cumulative_reward": cumulative_rewards[i],
-                    "eval/daily_return": daily_returns[i],
-                    "eval/trading_step": i
-                }, commit=False)
-            
+            dd_data = [[i, float(d)] for i, d in enumerate(dd_vals)]
+            dd_table = wandb.Table(data=dd_data, columns=["Evaluation Day", "Drawdown (%)"])
+            wandb.log({"eval/drawdown_plot": wandb.plot.line(
+                dd_table, "Evaluation Day", "Drawdown (%)", 
+                title=f"Neo Drawdown ({self.ticker})"
+            )})
+
+            # 2e. Learning Stability Table
+            stab_data = [[i, float(r)] for i, r in enumerate(cumulative_rewards)]
+            stab_table = wandb.Table(data=stab_data, columns=["Evaluation Day", "Cumulative Reward"])
+            wandb.log({"eval/cumulative_reward_plot": wandb.plot.line(
+                stab_table, "Evaluation Day", "Cumulative Reward", 
+                title=f"Learning Signal Stability ({self.ticker})"
+            )})
+
+            # 3. Final commitment
             wandb.log({"eval/completed": 1})
+            print(f"✅ Enhanced Weights & Biases Tables uploaded with axis labels for {self.ticker}")
 
         # Save results to local JSON for GitHub Actions/CI consumption
         results = {
