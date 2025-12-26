@@ -295,9 +295,21 @@ class NeoBot:
         avg_ret = np.mean(returns)
         std_ret = np.std(returns)
         sharpe = (avg_ret / std_ret) * np.sqrt(trading_days) if std_ret > 0 else 0
+        ann_vol = std_ret * np.sqrt(trading_days) * 100 # Annualized Volatility %
         
         total_return = (net_worths[-1] - net_worths[0]) / net_worths[0]
         bh_return = (prices[-1] - prices[0]) / prices[0]
+        
+        # Position Distribution
+        pos_series = pd.Series(positions)
+        long_pct = (pos_series == 1).sum() / len(pos_series) * 100
+        short_pct = (pos_series == -1).sum() / len(pos_series) * 100
+        cash_pct = (pos_series == 0).sum() / len(pos_series) * 100
+
+        # Profit Factor
+        gains = [r for r in returns if r > 0]
+        losses = [abs(r) for r in returns if r < 0]
+        profit_factor = sum(gains) / sum(losses) if sum(losses) > 0 else float('inf')
         
         # SMA Crossover Baseline (SMA 20 vs 50)
         # We simulate this on the test_df
@@ -445,9 +457,14 @@ class NeoBot:
             "buy_and_hold_return_pct": float(bh_return * 100),
             "sma_return_pct": float(sma_return * 100),
             "sharpe_ratio": float(sharpe),
+            "ann_volatility_pct": float(ann_vol),
+            "profit_factor": float(profit_factor),
             "max_drawdown_pct": float(max_drawdown * 100),
             "win_rate_pct": float(win_rate * 100),
             "total_trades": int(trades),
+            "long_bias_pct": float(long_pct),
+            "short_bias_pct": float(short_pct),
+            "cash_bias_pct": float(cash_pct),
             "final_net_worth": float(net_worths[-1])
         }
         with open("eval_results.json", "w") as f:

@@ -71,8 +71,14 @@ jobs:
           TR_PCT=$(jq -r '.total_return_pct' eval_results.json)
           BH_PCT=$(jq -r '.buy_and_hold_return_pct' eval_results.json)
           SHARPE=$(jq -r '.sharpe_ratio' eval_results.json)
+          VOL=$(jq -r '.ann_volatility_pct' eval_results.json)
+          PF=$(jq -r '.profit_factor' eval_results.json)
           MDD=$(jq -r '.max_drawdown_pct' eval_results.json)
           WR=$(jq -r '.win_rate_pct' eval_results.json)
+          TRADES=$(jq -r '.total_trades' eval_results.json)
+          LONG=$(jq -r '.long_bias_pct' eval_results.json)
+          SHORT=$(jq -r '.short_bias_pct' eval_results.json)
+          CASH=$(jq -r '.cash_bias_pct' eval_results.json)
           FW=$(jq -r '.final_net_worth' eval_results.json)
 
           if [[ $TR_PCT == -* ]]; then COLOR="red"; else COLOR="green"; fi
@@ -80,31 +86,43 @@ jobs:
           RELEASE_NOTES=$(cat <<EOF
           # 🛡️ Weekend Rigorous Audit: ${{ steps.ticker.outputs.ticker }}
           
-          > This is a high-pressure stress test on unseen 2025 data with realistic fees (0.1%) and slippage (0.05%).
+          > **Strategic Review Required**: This is a high-pressure stress test on unseen 2025 data. Review these metrics to decide on hyperparameter tweaks for next week's training cycle.
           
           ![Return](https://img.shields.io/badge/OOS_Return-${TR_PCT}%25-${COLOR}?style=for-the-badge)
           ![Sharpe](https://img.shields.io/badge/Sharpe-${SHARPE}-blue?style=for-the-badge)
-          ![WinRate](https://img.shields.io/badge/Win_Rate-${WR}%25-gold?style=for-the-badge)
+          ![ProfitFactor](https://img.shields.io/badge/Profit_Factor-${PF}-purple?style=for-the-badge)
 
-          ### 📉 Out-of-Sample (OOS) Performance
-          | Metric | Value | Baseline (B&H) |
+          ### 📉 Performance Deep Dive
+          | Primary Metric | Agent Result | Market Baseline (B&H) |
           | :--- | :--- | :--- |
-          | **Net Return** | \`${TR_PCT}%\` | \`${BH_PCT}%\` |
-          | **Sharpe Ratio** | \`${SHARPE}\` | \`-\` |
-          | **Max Drawdown** | \`${MDD}%\` | \`-\` |
-          | **Win Rate** | \`${WR}%\` | \`-\` |
+          | **Total Net Return** | \`${TR_PCT}%\` | \`${BH_PCT}%\` |
+          | **Risk-Adjusted (Sharpe)** | \`${SHARPE}\` | \`-\` |
+          | **Max Peak-to-Trough** | \`${MDD}%\` | \`-\` |
+          | **Annualized Volatility** | \`${VOL}%\` | \`-\` |
           
-          ### 🕵️ Audit Intel
-          - **Regime**: Out-of-Sample Robustness Check
-          - **Transaction Costs**: 0.1% Commission + 0.05% Slippage (Included)
-          - **Final Net Worth**: \`$${FW}\`
+          ### 🛠️ Execution & Strategy Efficiency
+          | Execution Metric | Value |
+          | :--- | :--- |
+          | **Profit Factor** | \`${PF}\` |
+          | **Win Rate** | \`${WR}%\` |
+          | **Total Trade Events** | \`${TRADES}\` |
+          | **Avg. Capital Utilization** | \`$${FW}\` final equity |
+
+          ### 🏗️ Portfolio Bias (Exposure)
+          > How much time did the agent spend in each state?
+          - 📈 **Long Exposure**: \`${LONG}%\`
+          - 📉 **Short Exposure**: \`${SHORT}%\`
+          - 💵 **Cash/Neutral**: \`${CASH}%\`
           
-          ### 📊 Deep Analysis
+          ### 📊 Analysis for Next Week
+          - **Regime Check**: If Cash/Neutral is high, the agent is being defensive.
+          - **Risk Check**: If Drawdown is $>15\%$, we need to increase the `vf_coef` or add more price features to the environment.
+          - **Profit Check**: A Profit Factor $<1.1$ indicates the model is just coin-flipping; check the `learning_rate`.
+
           Detailed equity curves and holding patterns are available in the [Weights & Biases Audit Dashboard](https://wandb.ai/home). 
-          Check the 'Neo Trading Activity' chart to see if the agent is being too passive.
           
           ---
-          *Neo v4 Rigorous Audit System*
+          *Neo v4 Rigorous Audit System - Generated on $(date)*
           EOF
           )
           
