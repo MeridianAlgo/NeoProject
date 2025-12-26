@@ -8,6 +8,7 @@ import json
 from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
+from stable_baselines3.common.monitor import Monitor
 from wandb.integration.sb3 import WandbCallback
 
 import src.data_fetcher as data_fetcher
@@ -72,14 +73,12 @@ class CustomLoggerCallback(BaseCallback):
             self.pbar.update(steps)
             self.last_step = self.num_timesteps
         
-        # Log to WandB periodically
+        # Log training info to WandB every 100 steps
         if self.n_calls % 100 == 0:
             metrics = {}
             for key, value in self.model.logger.name_to_value.items():
                 metrics[f"train/{key}"] = value
-            
-            # Add to WandB every 100 steps to avoid overhead
-            wandb.log(metrics, step=self.num_timesteps)
+            wandb.log(metrics)
             
         return True
 
@@ -132,7 +131,7 @@ class NeoBot:
 
     def get_env(self, df, training=True):
         """Creates a normalized environment."""
-        env_maker = lambda: TradingEnv(df)
+        env_maker = lambda: Monitor(TradingEnv(df))
         env = DummyVecEnv([env_maker])
         
         if training:
@@ -194,7 +193,7 @@ class NeoBot:
                     "vf_coef": 1.0,
                     "data_points": len(df)
                 },
-                sync_tensorboard=True,
+                sync_tensorboard=False,
                 save_code=True
             )
             # Standard WandbCallback for architectural logging
@@ -363,11 +362,7 @@ class NeoBot:
             wandb.run.summary["eval/final_net_worth"] = net_worths[-1]
             
             # 2. Log custom curves via Tables for persistent Y-Axis labeling
-            # Normalize for comparison plot
-            neo_curve = [nw / net_worths[0] for nw in net_worths]
-            bh_curve = [p / prices[0] for p in prices]
-            sma_curve = sma_net_worth
-
+            
             # 2a. Performance Comparison Table
             comp_data = []
             for i in range(len(neo_curve)):
@@ -398,12 +393,6 @@ class NeoBot:
             )})
 
             # 2d. Drawdown Table
-            dd_vals = []
-            current_peak = net_worths[0]
-            for nw in net_worths:
-                if nw > current_peak: current_peak = nw
-                dd_vals.append((nw - current_peak) / current_peak * 100)
-            
             dd_data = [[i, float(d)] for i, d in enumerate(dd_vals)]
             dd_table = wandb.Table(data=dd_data, columns=["Evaluation Day", "Drawdown (%)"])
             wandb.log({"eval/drawdown_plot": wandb.plot.line(
