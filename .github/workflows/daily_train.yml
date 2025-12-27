@@ -2,8 +2,8 @@ name: Rotating Ticker Training
 
 on:
   schedule:
-    # Train every hour, rotating through tickers
-    - cron: '0 * * * *'
+    # Train every 20 minutes on weekdays, rotating through tickers
+    - cron: '*/20 * * * 1-5'
   workflow_dispatch:
     inputs:
       ticker:
@@ -43,11 +43,14 @@ jobs:
       - name: Determine Ticker
         id: ticker
         run: |
-          # Determine which ticker to train based on hourly intervals
-          # We use Hour % 4 to rotate through our 4 tickers
+          # Determine which ticker to train based on 20-minute intervals
+          # We use (Hour*60 + Minute)/20 % 4 to rotate through our 4 tickers
           
           HOUR=$(date -u +%H)
-          SLOT=$((HOUR % 4))
+          MINUTE=$(date -u +%M)
+          # Use 10# to force base 10 (avoid octal errors with leading zeros)
+          TOTAL_MINUTES=$((10#$HOUR * 60 + 10#$MINUTE))
+          SLOT=$(( (TOTAL_MINUTES / 20) % 4 ))
           
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             TICKER="${{ github.event.inputs.ticker }}"
@@ -69,8 +72,8 @@ jobs:
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
           ALPACA_BASE_URL: https://paper-api.alpaca.markets
         run: |
-          # Increased steps to 1,000,000 for a solid ~1 hour training cycle
-          python neo.py --train --steps 1000000 --ticker ${{ steps.ticker.outputs.ticker }}
+          # Adjusted steps to 300,000 for a ~20 minute training cycle
+          python neo.py --train --steps 300000 --ticker ${{ steps.ticker.outputs.ticker }}
 
       - name: Get Training Stats
         id: stats
