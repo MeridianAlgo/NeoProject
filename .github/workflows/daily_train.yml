@@ -2,8 +2,8 @@ name: Rotating Ticker Training
 
 on:
   schedule:
-    # Train every 20 minutes, rotating through tickers
-    - cron: '0,20,40 * * * *'
+    # Train every hour, rotating through tickers
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       ticker:
@@ -43,14 +43,11 @@ jobs:
       - name: Determine Ticker
         id: ticker
         run: |
-          # Determine which ticker to train based on 20-min intervals
-          # 3 slots per hour (0, 20, 40)
-          # We use (Hour * 3 + Minute / 20) % 4 to rotate through our 4 tickers
+          # Determine which ticker to train based on hourly intervals
+          # We use Hour % 4 to rotate through our 4 tickers
           
           HOUR=$(date -u +%H)
-          MINUTE=$(date -u +%M)
-          MINUTE_SLOT=$((MINUTE / 20))
-          SLOT=$(((HOUR * 3 + MINUTE_SLOT) % 4))
+          SLOT=$((HOUR % 4))
           
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             TICKER="${{ github.event.inputs.ticker }}"
@@ -72,7 +69,8 @@ jobs:
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
           ALPACA_BASE_URL: https://paper-api.alpaca.markets
         run: |
-          python neo.py --train --steps 100000 --ticker ${{ steps.ticker.outputs.ticker }}
+          # Increased steps to 1,000,000 for a solid ~1 hour training cycle
+          python neo.py --train --steps 1000000 --ticker ${{ steps.ticker.outputs.ticker }}
 
       - name: Get Training Stats
         id: stats
@@ -81,6 +79,13 @@ jobs:
           TRAIN_COUNT=$(git rev-list --count HEAD --grep="Automated training" 2>/dev/null || echo "0")
           TRAIN_COUNT=$((TRAIN_COUNT + 1))
           echo "count=$TRAIN_COUNT" >> $GITHUB_OUTPUT
+          
+          # Check if we should release (every 10 runs)
+          if (( TRAIN_COUNT % 10 == 0 )); then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          fi
           
           # Get model size
           MODEL_SIZE=$(du -sh models/ | cut -f1)
@@ -99,7 +104,7 @@ jobs:
           git push || git push --force
 
       - name: Create Release Tag
-        if: success()
+        if: success() && steps.stats.outputs.should_release == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

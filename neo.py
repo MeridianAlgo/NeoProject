@@ -169,7 +169,7 @@ class NeoBot:
             eval_freq=5000,
             n_eval_episodes=5,
             deterministic=True,
-            verbose=0 # Stop eval spam too
+            verbose=1 # Show eval logs
         )
         callbacks.append(eval_callback)
         callbacks.append(CustomLoggerCallback(total_timesteps))
@@ -193,7 +193,7 @@ class NeoBot:
                     "vf_coef": 1.0,
                     "data_points": len(df)
                 },
-                sync_tensorboard=False,
+                sync_tensorboard=True,
                 save_code=True
             )
             # Standard WandbCallback for architectural logging
